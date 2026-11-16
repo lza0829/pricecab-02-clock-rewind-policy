@@ -35,3 +35,27 @@ def list_batches(conn: sqlite3.Connection, limit: int = 50) -> list[dict[str, An
         (limit,),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def has_running(conn: sqlite3.Connection) -> bool:
+    """是否存在应用到期进行中的批次（进行中禁止改钟）。"""
+    row = conn.execute(
+        "SELECT COUNT(*) c FROM apply_batches WHERE status='running'"
+    ).fetchone()
+    return int(row["c"]) > 0
+
+
+def mark_superseded(
+    conn: sqlite3.Connection,
+    batch_ids: list[int],
+    *,
+    note: str,
+) -> None:
+    """回拨后，被波及的已完成批次标记为 superseded 并追加说明（批次记录保留留痕）。"""
+    if not batch_ids:
+        return
+    placeholders = ",".join("?" for _ in batch_ids)
+    conn.execute(
+        f"UPDATE apply_batches SET status='superseded', note=? WHERE id IN ({placeholders})",
+        (note, *batch_ids),
+    )

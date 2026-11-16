@@ -10,6 +10,7 @@ from app.repositories import settings as settings_repo
 from app.repositories import tickets as ticket_repo
 from app.repositories import prices as price_repo
 from app.repositories import batches as batch_repo
+from app.services import clock_service
 
 
 def _now() -> str:
@@ -17,27 +18,12 @@ def _now() -> str:
 
 
 def get_clock() -> dict[str, Any]:
-    conn = connect()
-    try:
-        return {
-            "business_clock": settings_repo.get(conn, "business_clock"),
-            "clock_label": settings_repo.get(conn, "clock_label"),
-        }
-    finally:
-        conn.close()
+    return clock_service.get_clock()
 
 
 def set_clock(clock_at: str) -> dict[str, Any]:
-    clock_at = (clock_at or "").strip()
-    if not clock_at:
-        raise HTTPException(400, "业务钟不能为空")
-    conn = connect(immediate=True)
-    try:
-        settings_repo.set_value(conn, "business_clock", clock_at)
-        conn.commit()
-        return get_clock()
-    finally:
-        conn.close()
+    # 回拨策略、应用进行中守卫、留痕全部收敛在 clock_service。
+    return clock_service.set_clock(clock_at)
 
 
 def list_batches() -> list[dict[str, Any]]:
@@ -52,6 +38,9 @@ def apply_due() -> dict[str, Any]:
     """Apply all scheduled tickets whose effective_at <= business clock."""
     conn = connect(immediate=True)
     try:
+        # 双保险：已有进行中批次时拒绝再次应用（该批次也同时阻塞改钟）。
+        if batch_repo.has_running(conn):
+            raise HTTPException(409, "已有应用到期批次进行中，请等待其完成")
         clock = settings_repo.get(conn, "business_clock")
         if not clock:
             raise HTTPException(400, "业务钟未设置")
@@ -70,7 +59,7 @@ def apply_due() -> dict[str, Any]:
         created = _now()
         line_total = 0
         applied_tickets = []
-        # create batch first with zeros, update after
+        # create batch first with running status;改钟接口见到 running 会拒绝。
         batch_id = batch_repo.create_batch(
             conn,
             batch_no=batch_no,
@@ -84,7 +73,7 @@ def apply_due() -> dict[str, Any]:
         for t in due:
             lines = ticket_repo.list_lines(conn, t["id"])
             for line in lines:
-                price_repo.upsert_book(
+                price_repo.apply_price(
                     conn,
                     sku_code=line["sku_code"],
                     price=float(line["new_price"]),

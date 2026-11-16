@@ -25,6 +25,14 @@ export const api = {
   clock: () => request('/api/apply/clock'),
   setClock: (business_clock) =>
     request('/api/apply/clock', { method: 'PUT', body: JSON.stringify({ business_clock }) }),
+  clockEvents: () => request('/api/apply/clock/events'),
+  rewindPolicyOptions: () => request('/api/settings/clock-rewind-policy/options'),
+  getRewindPolicy: () => request('/api/settings/clock-rewind-policy'),
+  setRewindPolicy: (clock_rewind_policy) =>
+    request('/api/settings/clock-rewind-policy', {
+      method: 'PUT',
+      body: JSON.stringify({ clock_rewind_policy }),
+    }),
   applyDue: () => request('/api/apply/due', { method: 'POST' }),
   batches: () => request('/api/apply/batches'),
   priceBook: () => request('/api/prices/book'),

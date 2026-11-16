@@ -45,17 +45,20 @@ onMounted(async () => {
 
   <div class="panel">
     <h2>价格历史</h2>
+    <p class="msg" style="margin-top:0">历史只追加不删除；回拨后被作废的应用结果标注为 voided 并附作废说明，对账只取 active 记录。</p>
     <table>
       <thead>
-        <tr><th>SKU</th><th>价格</th><th>来源单</th><th>生效时刻</th><th>记录时间</th></tr>
+        <tr><th>SKU</th><th>价格</th><th>来源单</th><th>生效时刻</th><th>记录时间</th><th>状态</th><th>说明</th></tr>
       </thead>
       <tbody>
-        <tr v-for="h in history" :key="h.id">
+        <tr v-for="h in history" :key="h.id" :style="h.status === 'voided' ? { opacity: 0.55 } : {}">
           <td>{{ h.sku_code }}</td>
           <td>{{ h.price }}</td>
           <td>{{ h.source_ticket_no || '初始' }}</td>
           <td>{{ h.effective_at }}</td>
           <td>{{ h.recorded_at }}</td>
+          <td><span class="tag" :class="h.status === 'voided' ? 'bad' : 'ok'">{{ h.status }}</span></td>
+          <td>{{ h.note || '—' }}</td>
         </tr>
       </tbody>
     </table>

@@ -3,6 +3,8 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
+from app.services.clock_policy import REWIND_TICKET_STATUS
+
 
 def next_ticket_no(conn: sqlite3.Connection) -> str:
     n = conn.execute("SELECT COUNT(*) c FROM price_tickets").fetchone()["c"] + 1
@@ -99,4 +101,29 @@ def mark_applied(
         WHERE id=?
         ''',
         (applied_at, batch_id, ticket_id),
+    )
+
+
+def applied_tickets_after(conn: sqlite3.Connection, clock_at: str) -> list[dict[str, Any]]:
+    """已应用、且生效时刻晚于给定钟点的改价单（回拨将波及它们）。"""
+    rows = conn.execute(
+        '''
+        SELECT * FROM price_tickets
+        WHERE status='applied' AND effective_at > ?
+        ORDER BY effective_at, id
+        ''',
+        (clock_at,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def reschedule_ticket(conn: sqlite3.Connection, ticket_id: int) -> None:
+    """回拨作废：已应用改价单固定改回「可再调度」态，清空应用痕迹（单据本身保留）。"""
+    conn.execute(
+        '''
+        UPDATE price_tickets
+        SET status=?, applied_at=NULL, apply_batch_id=NULL
+        WHERE id=?
+        ''',
+        (REWIND_TICKET_STATUS, ticket_id),
     )
